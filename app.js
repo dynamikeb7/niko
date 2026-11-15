@@ -709,7 +709,13 @@ function vSheet() {
         ${r.status === 'asked' && r.requestId ? `<a class="primary" href="${waLink(askText(r, r.requestId))}" target="_blank" rel="noopener">Nochmal in der Gruppe fragen</a>` : ''}
         ${r.changed ? '<button class="textbtn" style="align-self:center" data-a="reset">Zurück zum Standardplan</button>' : ''}
       </div>
-      ${kids ? `<div class="stack" style="gap:8px"><span class="label">Wer kommt am ${DAYS_LONG[r.wd]}?</span><div class="switches">${kids}</div></div>` : ''}`;
+      ${kids ? `<div class="stack" style="gap:8px"><span class="label">Wer kommt am ${DAYS_LONG[r.wd]}?</span><div class="switches">${kids}</div></div>` : ''}
+      <form class="stack" style="gap:8px" data-form="note">
+        <div class="field"><label class="label" for="note">Notiz für ${DAYS_LONG[r.wd]}</label>
+        <textarea id="note" name="body" maxlength="500" placeholder="z. B. Treffpunkt heute beim Spielplatz">${esc(S.notes[sh.day] || '')}</textarea></div>
+        <button class="secondary" type="submit" ${S.busy ? 'disabled' : ''}>Notiz speichern</button>
+      </form>
+      <button class="textbtn" style="align-self:center" data-a="day" data-day="${sh.day}">Mitteilung vom Kindergarten eintragen</button>`;
     return sheetFrame('', `${DAYS_LONG[r.wd]}, ${short(d)}`, inner);
   }
   if (sh.type === 'share') {

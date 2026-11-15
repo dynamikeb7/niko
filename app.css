@@ -244,8 +244,21 @@ h1, h2, p { margin: 0; }
 .t-row.mine .t-txt span { font-size: 14.5px; color: var(--ink); }
 .t-row.warn .t-txt b { color: var(--rot-ink); }
 .t-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 2px; }
-.t-btn { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1.5px solid var(--ink); background: transparent; color: var(--ink); font-size: 14px; font-weight: 800; }
 
 /* Kind bleibt zuhause */
 .home-line { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 800; background: var(--grau-soft); border-radius: 14px; padding: 8px 10px; }
 .day.all-home .slot { opacity: .45; }
+
+/* Schalter Kind kommt / bleibt zuhause */
+.t-actions { flex-direction: column; flex-wrap: nowrap; }
+.switches { display: flex; flex-direction: column; gap: 8px; }
+.switch-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 52px;
+  padding: 6px 10px 6px 14px; border-radius: 18px; border: 1.5px solid var(--grau); background: var(--card); text-align: left;
+  font-size: 15px;
+}
+.switch-row .sr-txt { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.switch-row[aria-checked="false"] { background: var(--grau-soft); border-color: var(--grau-soft); }
+.sw { width: 52px; height: 32px; flex: none; border-radius: 16px; background: var(--line); padding: 3px; display: flex; justify-content: flex-start; transition: background .15s; }
+.sw .knob { width: 26px; height: 26px; border-radius: 13px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(38,36,59,.3); }
+.switch-row[aria-checked="true"] .sw { background: var(--gruen-ink); justify-content: flex-end; }

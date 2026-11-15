@@ -456,6 +456,15 @@ function errorPill() {
   return S.error ? `<p class="pill err" role="alert">${esc(S.error)} <button class="textbtn" style="min-height:32px" data-a="retry">Nochmal</button></p>` : '';
 }
 
+// Schalter: an = Kind kommt, aus = bleibt zuhause.
+function kidSwitch(iso, c, when) {
+  const absent = absentOn(iso).includes(c.id);
+  const w = when ? ` ${when}` : '';
+  return `<button class="switch-row" role="switch" aria-checked="${!absent}" data-a="absence" data-day="${iso}" data-child="${c.id}" data-absent="${!absent}">
+    <span class="sr-txt">${absent ? icoHome() : ''}<span><b>${esc(c.name)}</b> ${absent ? `bleibt${w} zuhause` : `kommt${w}`}</span></span>
+    <span class="sw" aria-hidden="true"><span class="knob"></span></span></button>`;
+}
+
 function focusDay() {
   const now = new Date();
   let d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -487,16 +496,14 @@ function todayCard() {
       ${v.open ? icoWarn() : ''}<span class="t-txt"><b>${esc(main)}</b>${v.lines.map((l) => `<span>${esc(l)}</span>`).join('')}</span></div>`);
   });
   const notices = (S.notices[iso] || []).map((n) => `<div class="t-row">${icoInfo()}<span class="t-txt"><b>${esc(n.title)}</b>${n.bring_by ? `<span>Bis ${esc(n.bring_by)} im Kindergarten</span>` : ''}</span></div>`).join('');
-  const home = absenceText(iso);
   const myFam = S.people[S.me] ? S.people[S.me].family : null;
   const myKids = S.children.filter((c) => c.family === myFam);
-  const kidBtns = myKids.map((c) => {
-    const absent = absentOn(iso).includes(c.id);
-    return `<button class="t-btn" data-a="absence" data-day="${iso}" data-child="${c.id}" data-absent="${!absent}">${icoHome()}<span>${esc(absent ? `${c.name} kommt doch` : `${c.name} kommt ${f.label.toLowerCase()} nicht`)}</span></button>`;
-  }).join('');
+  const kidBtns = myKids.map((c) => kidSwitch(iso, c, f.label.toLowerCase())).join('');
+  // Die eigenen Kinder zeigt der Schalter, hier nur die der anderen Familie.
+  const otherHome = absentOn(iso).filter((id) => !myKids.some((c) => c.id === id));
   return `<section class="today-card" aria-label="${f.label}">
     <div class="t-head"><span>${f.label}</span><small>${DAYS_LONG[wd]}, ${short(f.d)}</small></div>
-    ${home ? `<div class="t-row">${icoHome()}<span class="t-txt"><b>${esc(home)}</b></span></div>` : ''}
+    ${otherHome.length ? `<div class="t-row">${icoHome()}<span class="t-txt"><b>${esc(otherHome.map(childName).join(' und '))} bleibt zuhause</b></span></div>` : ''}
     ${allHome ? '' : rows.join('')}
     ${notices}
     ${kidBtns ? `<div class="t-actions">${kidBtns}</div>` : ''}
@@ -717,12 +724,9 @@ function vSheet() {
           ? `<button class="textbtn danger" style="flex:none" data-a="del-notice" data-id="${n.id}">Wirklich löschen</button>`
           : `<button class="textbtn" style="flex:none" data-a="ask-del" data-id="${n.id}">Löschen</button>`}
       </div>`).join('');
-    const kids = S.children.map((c) => {
-      const absent = absentOn(sh.day).includes(c.id);
-      return `<button class="opt ${c.family}" data-a="absence" data-day="${sh.day}" data-child="${c.id}" data-absent="${!absent}" aria-pressed="${absent}">${icoHome()}<span>${esc(c.name)} bleibt zuhause</span></button>`;
-    }).join('');
+    const kids = S.children.map((c) => kidSwitch(sh.day, c, '')).join('');
     const inner = `
-      ${kids ? `<div class="stack" style="gap:8px"><span class="label">Wer kommt nicht?</span><div class="grid2">${kids}</div></div>` : ''}
+      ${kids ? `<div class="stack" style="gap:8px"><span class="label">Wer kommt in den Kindergarten?</span><div class="switches">${kids}</div></div>` : ''}
       <form class="stack" data-form="note">
         <div class="field"><label class="label" for="note">Notiz für ${DAYS_LONG[wd]}</label>
         <textarea id="note" name="body" maxlength="500" placeholder="z. B. Turnsachen mitnehmen">${esc(S.notes[sh.day] || '')}</textarea></div>

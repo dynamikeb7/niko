@@ -1,4 +1,4 @@
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
+import { SUPABASE_URL, SUPABASE_KEY, VAPID_PUBLIC_KEY } from './config.js';
 
 // ---------- Hilfen ----------
 
@@ -37,6 +37,9 @@ function baseMonday() {
 }
 const join = (xs) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} und ${xs[xs.length - 1]}`;
 
+const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const STANDALONE = navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch { /* egal */ } },
@@ -59,6 +62,7 @@ const icoLeft = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 
 const icoRight = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const icoChev = '<svg class="chev" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const icoSplit = '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 16 16"><path d="M8 14.5V9L3.8 4.6M8 9l4.2-4.4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 7.4V3.8h3.6M13 7.4V3.8H9.4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const icoBell = '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" style="flex:none"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z" fill="#F7D560" stroke="#26243B" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 20.5a2 2 0 0 0 4 0" fill="none" stroke="#26243B" stroke-width="1.8" stroke-linecap="round"/></svg>';
 const icoClose = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 const icoWarn = (label) => `<svg ${label ? `role="img" aria-label="${label}"` : 'aria-hidden="true"'} width="18" height="18" viewBox="0 0 16 16" style="flex:none"><path d="M8 1.6l6.8 11.9H1.2z" fill="#C2452D" stroke="#C2452D" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 6.2v3.3" fill="none" stroke="#FFFFFF" stroke-width="1.7" stroke-linecap="round"/><circle cx="8" cy="11.5" r="0.95" fill="#FFFFFF"/></svg>`;
 const icoInfo = (label) => `<svg ${label ? `role="img" aria-label="${label}"` : 'aria-hidden="true"'} width="18" height="18" viewBox="0 0 16 16" style="flex:none"><circle cx="8" cy="8" r="7.4" fill="#1D5FBF"/><path d="M8 7.3v4" fill="none" stroke="#FFFFFF" stroke-width="1.7" stroke-linecap="round"/><circle cx="8" cy="4.6" r="1" fill="#FFFFFF"/></svg>`;
@@ -84,6 +88,7 @@ const S = {
   error: null,
   busy: false,
   nolinkReason: null,
+  pushOn: false,
 };
 
 // ---------- Datenbank ----------
@@ -243,6 +248,104 @@ function askText(r, reqId) {
   return `${meName()} sucht Ersatz: ${DAYS_LONG[r.wd]}, ${short(d)}, ${KIND[r.kind]}${extra}. Wer kann übernehmen?\n${baseUrl()}?anfrage=${reqId}`;
 }
 
+// ---------- Benachrichtigungen ----------
+
+const PUSH_API = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+let swReg = null;
+
+function b64ToBytes(b64) {
+  const pad64 = '='.repeat((4 - (b64.length % 4)) % 4);
+  const raw = atob((b64 + pad64).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+
+function pushState() {
+  if (IOS && !STANDALONE) return 'ios-homescreen';
+  if (!PUSH_API || !swReg) return 'unsupported';
+  if (Notification.permission === 'denied') return 'denied';
+  return S.pushOn ? 'on' : 'off';
+}
+
+async function sendSub(sub) {
+  const j = sub.toJSON();
+  await call('niko_push_subscribe', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth });
+}
+
+async function syncPush() {
+  if (!swReg || !PUSH_API || Notification.permission !== 'granted' || !S.token) { S.pushOn = false; return; }
+  try {
+    const sub = await swReg.pushManager.getSubscription();
+    S.pushOn = !!sub;
+    if (sub) await sendSub(sub);
+  } catch { /* nächstes Mal */ }
+}
+
+async function enablePush() {
+  if (!swReg) return;
+  let perm;
+  try { perm = await Notification.requestPermission(); } catch { perm = 'denied'; }
+  if (perm !== 'granted') { toast('Benachrichtigungen wurden nicht erlaubt'); render(); return; }
+  try {
+    let sub = await swReg.pushManager.getSubscription();
+    if (!sub) sub = await swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID_PUBLIC_KEY) });
+    await sendSub(sub);
+    S.pushOn = true;
+    toast('Benachrichtigungen sind an');
+  } catch (e) {
+    toast('Das hat nicht geklappt. Bitte später nochmal.');
+  }
+  render();
+}
+
+async function disablePush() {
+  if (!swReg) { S.pushOn = false; return; }
+  try {
+    const sub = await swReg.pushManager.getSubscription();
+    if (sub) {
+      if (S.token) await call('niko_push_unsubscribe', { p_endpoint: sub.endpoint }).catch(() => undefined);
+      await sub.unsubscribe();
+    }
+  } catch { /* egal */ }
+  S.pushOn = false;
+}
+
+async function initPush() {
+  if (!('serviceWorker' in navigator)) return;
+  try { swReg = await navigator.serviceWorker.register('sw.js'); } catch { swReg = null; }
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (e.data && e.data.type === 'niko-open' && typeof e.data.url === 'string' && e.data.url.startsWith(location.origin)) {
+      location.href = e.data.url;
+    }
+  });
+  await syncPush();
+  render();
+}
+
+function pushBanner() {
+  const st = pushState();
+  const later = Number(store.get('niko_push_later') || 0);
+  if (Date.now() - later < 7 * 86400000) return '';
+  if (st === 'off') {
+    return `<div class="box" style="background:var(--card)"><div style="display:flex;gap:10px;align-items:flex-start">${icoBell}
+      <div class="stack" style="gap:2px"><b>Benachrichtigungen einschalten?</b><span class="lead" style="font-size:14px">Für Anfragen, Zusagen, offene Tage, Mitteilungen vom Kindergarten und die Erinnerung am Morgen.</span></div></div>
+      <div class="row"><button class="primary" style="min-height:48px;font-size:15px" data-a="push-on">Einschalten</button><button class="secondary" style="min-height:48px;font-size:15px" data-a="push-later">Später</button></div></div>`;
+  }
+  if (st === 'ios-homescreen') {
+    return `<div class="box" style="background:var(--card)"><div style="display:flex;gap:10px;align-items:flex-start">${icoBell}
+      <div class="stack" style="gap:2px"><b>Benachrichtigungen am iPhone</b><span class="lead" style="font-size:14px">Die gibt es nur über das NiKo-Symbol am Home-Bildschirm: in Safari auf Teilen, dann "Zum Home-Bildschirm". Danach NiKo über das Symbol öffnen.</span></div></div>
+      <button class="secondary" style="min-height:48px;font-size:15px" data-a="push-later">Verstanden</button></div>`;
+  }
+  return '';
+}
+
+function pushLink() {
+  const st = pushState();
+  if (st === 'on') return '<button class="textbtn" data-a="push-off">Benachrichtigungen aus</button>';
+  if (st === 'off') return '<button class="textbtn" data-a="push-on">Benachrichtigungen an</button>';
+  if (st === 'denied') return '<span class="hint" style="margin:12px 0 0;text-align:center;width:100%">Benachrichtigungen sind im Browser blockiert. Erlauben kannst du sie in den Website-Einstellungen.</span>';
+  return '';
+}
+
 // ---------- Rendering ----------
 
 const app = document.getElementById('app');
@@ -370,9 +473,11 @@ function vWeek() {
     ${loading ? '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>' : `
     ${openList.length ? `<p class="pill warn">${icoWarn()}<span>Noch offen: ${esc(openList.join(', '))}</span></p>` : ''}
     ${noticeList.length ? `<p class="pill info">${icoInfo()}<span>Kindergarten: ${esc(noticeList.join(', '))}</span></p>` : ''}
+    ${pushBanner()}
     ${cards}
     <div class="links">
       <button class="textbtn" data-a="go-standard">Standardplan</button>
+      ${pushLink()}
       <button class="textbtn" data-a="not-me">Ich bin nicht ${esc(meName())}</button>
     </div>`}
   </div></div>`;
@@ -561,6 +666,7 @@ app.addEventListener('click', async (ev) => {
       render();
       break;
     case 'not-me':
+      await disablePush();
       store.del('niko_token');
       S.token = null; S.view = 'nolink'; S.nolinkReason = null; S.sheet = null;
       render();
@@ -638,6 +744,9 @@ app.addEventListener('click', async (ev) => {
       break;
     }
     case 'decline': S.request.result = 'declined'; render(); break;
+    case 'push-on': await enablePush(); break;
+    case 'push-off': await disablePush(); toast('Benachrichtigungen sind aus'); render(); break;
+    case 'push-later': store.set('niko_push_later', String(Date.now())); render(); break;
     default: break;
   }
 });
@@ -706,9 +815,7 @@ async function start() {
   // iPhone: Ein Symbol auf dem Startbildschirm hat einen eigenen Speicher und startet mit der
   // Adresse, die beim Hinzufügen offen war. Darum bleibt dort der Link in der Adresse stehen.
   // Überall sonst nehmen wir den Token aus der Adresszeile.
-  const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const standalone = navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
-  if (ios && !standalone && S.token) {
+  if (IOS && !STANDALONE && S.token) {
     if (t !== S.token) history.replaceState(null, '', `${location.pathname}?t=${S.token}${S.requestId ? `&anfrage=${S.requestId}` : ''}${location.hash}`);
   } else if (t) {
     history.replaceState(null, '', location.pathname + (S.requestId ? `?anfrage=${S.requestId}` : '') + location.hash);
@@ -730,6 +837,7 @@ async function start() {
     else if (S.requestId) S.view = 'request';
     else S.view = location.hash === '#standard' ? 'standard' : 'week';
     render();
+    initPush();
   } catch (e) {
     S.view = 'week';
     handleError(e);

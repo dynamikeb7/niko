@@ -63,6 +63,7 @@ const icoRight = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16
 const icoChev = '<svg class="chev" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const icoSplit = '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 16 16"><path d="M8 14.5V9L3.8 4.6M8 9l4.2-4.4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 7.4V3.8h3.6M13 7.4V3.8H9.4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const icoBell = '<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" style="flex:none"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z" fill="#F7D560" stroke="#26243B" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 20.5a2 2 0 0 0 4 0" fill="none" stroke="#26243B" stroke-width="1.8" stroke-linecap="round"/></svg>';
+const icoHome = (color = '#26243B') => `<svg aria-hidden="true" width="18" height="18" viewBox="0 0 16 16" style="flex:none"><path d="M2.5 7.2L8 2.5l5.5 4.7V13a.8.8 0 0 1-.8.8H3.3a.8.8 0 0 1-.8-.8z" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round"/><path d="M6.4 13.8V10h3.2v3.8" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
 const icoClose = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 const icoWarn = (label) => `<svg ${label ? `role="img" aria-label="${label}"` : 'aria-hidden="true"'} width="18" height="18" viewBox="0 0 16 16" style="flex:none"><path d="M8 1.6l6.8 11.9H1.2z" fill="#C2452D" stroke="#C2452D" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 6.2v3.3" fill="none" stroke="#FFFFFF" stroke-width="1.7" stroke-linecap="round"/><circle cx="8" cy="11.5" r="0.95" fill="#FFFFFF"/></svg>`;
 const icoInfo = (label) => `<svg ${label ? `role="img" aria-label="${label}"` : 'aria-hidden="true"'} width="18" height="18" viewBox="0 0 16 16" style="flex:none"><circle cx="8" cy="8" r="7.4" fill="#1D5FBF"/><path d="M8 7.3v4" fill="none" stroke="#FFFFFF" stroke-width="1.7" stroke-linecap="round"/><circle cx="8" cy="4.6" r="1" fill="#FFFFFF"/></svg>`;
@@ -89,6 +90,8 @@ const S = {
   busy: false,
   nolinkReason: null,
   pushOn: false,
+  children: [],
+  absences: {},
 };
 
 // ---------- Datenbank ----------
@@ -132,6 +135,9 @@ async function load(off = S.off, silent = false) {
   S.notes = Object.fromEntries(d.notes.map((x) => [x.day, x.body]));
   S.notices = {};
   for (const n of d.notices) (S.notices[n.day] ||= []).push(n);
+  S.children = d.children || [];
+  S.absences = {};
+  for (const a of d.absences || []) (S.absences[a.day] ||= []).push(a.child_id);
   S.loaded = off;
   if (!silent) S.error = null;
   return d;
@@ -358,6 +364,51 @@ function toast(msg) {
   toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
 }
 
+let snackTimer;
+function hideSnack() {
+  const el = document.getElementById('snack');
+  if (el) el.classList.remove('show');
+}
+function snack(msg, undoFn) {
+  const el = document.getElementById('snack');
+  if (!el) { toast(msg); return; }
+  el.innerHTML = `<span>${esc(msg)}</span><button type="button">Rückgängig</button>`;
+  el.querySelector('button').onclick = async () => {
+    hideSnack();
+    clearTimeout(snackTimer);
+    const ok = await undoFn();
+    if (ok) { toast('Rückgängig gemacht'); render(); }
+  };
+  el.classList.add('show');
+  clearTimeout(snackTimer);
+  snackTimer = setTimeout(hideSnack, 7000);
+}
+
+// Vorheriger Stand eines Tages, um eine Änderung zurückzunehmen.
+function undoForSlot(day, kind) {
+  const prev = S.slots[`${day}-${kind}`];
+  if (prev && prev.status === 'asked') return null;
+  if (!prev) return () => act('niko_set_slot', { p_day: day, p_kind: kind, p_status: 'reset', p_person: null });
+  return () => act('niko_set_slot', { p_day: day, p_kind: kind, p_status: prev.status, p_person: prev.person_id || null });
+}
+
+const absentOn = (iso) => S.absences[iso] || [];
+const childName = (id) => (S.children.find((c) => c.id === id) || { name: id }).name;
+function absenceText(iso) {
+  const ids = absentOn(iso);
+  if (!ids.length) return '';
+  if (S.children.length && ids.length >= S.children.length) return 'Beide bleiben zuhause';
+  return `${ids.map(childName).join(' und ')} bleibt zuhause`;
+}
+async function toggleAbsence(iso, child, absent) {
+  const res = await act('niko_set_absence', { p_day: iso, p_child: child, p_absent: absent });
+  if (res) {
+    render();
+    snack(absent ? `${childName(child)} bleibt zuhause` : `${childName(child)} kommt doch`,
+      () => act('niko_set_absence', { p_day: iso, p_child: child, p_absent: !absent }));
+  }
+}
+
 function render() {
   const views = { boot: vBoot, nolink: vNolink, welcome: vWelcome, week: vWeek, standard: vStandard, request: vRequest };
   app.innerHTML = (views[S.view] || vBoot)() + (S.sheet ? vSheet() : '');
@@ -405,6 +456,53 @@ function errorPill() {
   return S.error ? `<p class="pill err" role="alert">${esc(S.error)} <button class="textbtn" style="min-height:32px" data-a="retry">Nochmal</button></p>` : '';
 }
 
+function focusDay() {
+  const now = new Date();
+  let d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let label = 'Heute';
+  if (now.getHours() >= 18) { d = addDays(d, 1); label = 'Morgen'; }
+  if ((d.getDay() + 6) % 7 > 4) return null;
+  if (isoOf(mondayOf(d)) !== isoOf(weekRange(0).mon)) return null;
+  return { d, label };
+}
+
+function todayCard() {
+  if (S.off !== 0) return '';
+  const f = focusDay();
+  if (!f) return '';
+  const iso = isoOf(f.d);
+  const wd = (f.d.getDay() + 6) % 7;
+  const rs = ['bring', 'pick'].map((k) => resolve(f.d, k));
+  const vs = rs.map(slotView);
+  const allHome = S.children.length && absentOn(iso).length >= S.children.length;
+  const rows = [];
+  rs.forEach((r, i) => {
+    const v = vs[i];
+    const mine = r.status === 'person' && r.person === S.me;
+    let main;
+    if (mine) main = r.kind === 'bring' ? 'Du bringst' : 'Du holst ab';
+    else if (v.open) main = `${KIND[r.kind]}: ${v.who}`;
+    else main = `${KIND[r.kind]}: ${v.who}`;
+    rows.push(`<div class="t-row${mine ? ' mine' : ''}${v.open ? ' warn' : ''}">
+      ${v.open ? icoWarn() : ''}<span class="t-txt"><b>${esc(main)}</b>${v.lines.map((l) => `<span>${esc(l)}</span>`).join('')}</span></div>`);
+  });
+  const notices = (S.notices[iso] || []).map((n) => `<div class="t-row">${icoInfo()}<span class="t-txt"><b>${esc(n.title)}</b>${n.bring_by ? `<span>Bis ${esc(n.bring_by)} im Kindergarten</span>` : ''}</span></div>`).join('');
+  const home = absenceText(iso);
+  const myFam = S.people[S.me] ? S.people[S.me].family : null;
+  const myKids = S.children.filter((c) => c.family === myFam);
+  const kidBtns = myKids.map((c) => {
+    const absent = absentOn(iso).includes(c.id);
+    return `<button class="t-btn" data-a="absence" data-day="${iso}" data-child="${c.id}" data-absent="${!absent}">${icoHome('#FFFFFF')}<span>${esc(absent ? `${c.name} kommt doch` : `${c.name} kommt ${f.label.toLowerCase()} nicht`)}</span></button>`;
+  }).join('');
+  return `<section class="today-card" aria-label="${f.label}">
+    <div class="t-head"><span>${f.label}</span><small>${DAYS_LONG[wd]}, ${short(f.d)}</small></div>
+    ${home ? `<div class="t-row">${icoHome('#F7D560')}<span class="t-txt"><b>${esc(home)}</b></span></div>` : ''}
+    ${allHome ? '' : rows.join('')}
+    ${notices}
+    ${kidBtns ? `<div class="t-actions">${kidBtns}</div>` : ''}
+  </section>`;
+}
+
 function vWeek() {
   const days = weekDays(S.off);
   const mon = days[0];
@@ -426,14 +524,16 @@ function vWeek() {
     const vs = rs.map(slotView);
     rs.forEach((r, i) => {
       if (r.status === 'person' && r.person === S.me) (r.kind === 'bring' ? myBring : myPick).push(DAYS[wd]);
-      if (vs[i].open) openList.push(`${DAYS[wd]} ${KIND[r.kind]}`);
+      const everyoneHome = S.children.length && absentOn(iso).length >= S.children.length;
+      if (vs[i].open && !everyoneHome) openList.push(`${DAYS[wd]} ${KIND[r.kind]}`);
     });
     const notices = S.notices[iso] || [];
     notices.forEach((n) => noticeList.push(`${DAYS[wd]} ${n.title}`));
-    const warn = vs.some((v) => v.open);
+    const allHome = S.children.length && absentOn(iso).length >= S.children.length;
+    const warn = !allHome && vs.some((v) => v.open);
     const note = S.notes[iso];
     const isToday = iso === todayIso;
-    return `<section class="day${isToday ? ' today' : ''}" aria-label="${DAYS_LONG[wd]}, ${short(day)}">
+    return `<section class="day${isToday ? ' today' : ''}${allHome ? ' all-home' : ''}" aria-label="${DAYS_LONG[wd]}, ${short(day)}">
       <button class="badge" data-a="day" data-day="${iso}" aria-label="${DAYS_LONG[wd]} ${short(day)}: Notiz und Kindergarten-Mitteilung">
         ${isToday ? '<span class="today-tag">Heute</span>' : ''}
         <b>${DAYS[wd]}</b><small>${short(day)}</small>
@@ -445,6 +545,7 @@ function vWeek() {
           <span class="txt"><span class="kind">${KIND[rs[i].kind]}${rs[i].changed ? ' · geändert' : ''}</span>
           <span class="who">${esc(v.who)}</span>
           ${v.lines.map((l) => `<span class="det">${esc(l)}</span>`).join('')}</span>${icoChev}</button>`).join('')}
+        ${absentOn(iso).length ? `<div class="home-line">${icoHome()}<span>${esc(absenceText(iso))}</span></div>` : ''}
         ${notices.map((n) => `<div class="notice">${icoInfo()}<span class="txt"><span class="lbl">Kindergarten</span><b>${esc(n.title)}</b>${n.bring_by ? `<span>Bis spätestens ${esc(n.bring_by)} im Kindergarten.</span>` : ''}${n.body ? `<span>${esc(n.body)}</span>` : ''}</span></div>`).join('')}
         ${note ? `<p class="note">Notiz: ${esc(note)}</p>` : ''}
       </div>
@@ -471,6 +572,7 @@ function vWeek() {
   <div class="list">
     ${errorPill()}
     ${loading ? '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>' : `
+    ${todayCard()}
     ${openList.length ? `<p class="pill warn">${icoWarn()}<span>Noch offen: ${esc(openList.join(', '))}</span></p>` : ''}
     ${noticeList.length ? `<p class="pill info">${icoInfo()}<span>Kindergarten: ${esc(noticeList.join(', '))}</span></p>` : ''}
     ${pushBanner()}
@@ -615,7 +717,12 @@ function vSheet() {
           ? `<button class="textbtn danger" style="flex:none" data-a="del-notice" data-id="${n.id}">Wirklich löschen</button>`
           : `<button class="textbtn" style="flex:none" data-a="ask-del" data-id="${n.id}">Löschen</button>`}
       </div>`).join('');
+    const kids = S.children.map((c) => {
+      const absent = absentOn(sh.day).includes(c.id);
+      return `<button class="opt ${c.family}" data-a="absence" data-day="${sh.day}" data-child="${c.id}" data-absent="${!absent}" aria-pressed="${absent}">${icoHome()}<span>${esc(c.name)} bleibt zuhause</span></button>`;
+    }).join('');
     const inner = `
+      ${kids ? `<div class="stack" style="gap:8px"><span class="label">Wer kommt nicht?</span><div class="grid2">${kids}</div></div>` : ''}
       <form class="stack" data-form="note">
         <div class="field"><label class="label" for="note">Notiz für ${DAYS_LONG[wd]}</label>
         <textarea id="note" name="body" maxlength="500" placeholder="z. B. Turnsachen mitnehmen">${esc(S.notes[sh.day] || '')}</textarea></div>
@@ -682,16 +789,26 @@ app.addEventListener('click', async (ev) => {
     case 'day': S.sheet = { type: 'day', day: ds.day }; render(); break;
     case 'set-slot': {
       const sh = S.sheet;
-      const ok = await act('niko_set_slot', { p_day: sh.day, p_kind: sh.kind, p_status: ds.status, p_person: ds.person || null }, 'Gespeichert');
-      if (ok) { S.sheet = null; render(); }
+      const undo = undoForSlot(sh.day, sh.kind);
+      const ok = await act('niko_set_slot', { p_day: sh.day, p_kind: sh.kind, p_status: ds.status, p_person: ds.person || null });
+      if (ok) {
+        S.sheet = null; render();
+        const label = ds.status === 'person' ? nameOf(ds.person) : ds.status === 'separate' ? 'Getrennt' : 'Offen';
+        if (undo) snack(`${DAYS[(parseIso(sh.day).getDay() + 6) % 7]} ${KIND[sh.kind]}: ${label}`, undo); else toast('Gespeichert');
+      }
       break;
     }
     case 'reset': {
       const sh = S.sheet;
-      const ok = await act('niko_set_slot', { p_day: sh.day, p_kind: sh.kind, p_status: 'reset', p_person: null }, 'Zurück zum Standardplan');
-      if (ok) { S.sheet = null; render(); }
+      const undo = undoForSlot(sh.day, sh.kind);
+      const ok = await act('niko_set_slot', { p_day: sh.day, p_kind: sh.kind, p_status: 'reset', p_person: null });
+      if (ok) {
+        S.sheet = null; render();
+        if (undo) snack('Zurück zum Standardplan', undo); else toast('Zurück zum Standardplan');
+      }
       break;
     }
+    case 'absence': await toggleAbsence(ds.day, ds.child, ds.absent === 'true'); break;
     case 'ask': {
       const sh = S.sheet;
       const res = await act('niko_ask', { p_day: sh.day, p_kind: sh.kind });

@@ -204,7 +204,7 @@ begin
       niko_label(p_day, p_kind) || ' ist jetzt offen. Wer kann?', '', 'slot-' || p_day || '-' || p_kind);
   end if;
   -- Jemand wurde von einer anderen Person eingetragen.
-  if v_after.status = 'person' and v_after.person_id <> v_me
+  if p_status <> 'reset' and v_after.status = 'person' and v_after.person_id <> v_me
      and v_after.person_id is distinct from v_before.person_id then
     perform niko_push(array[v_after.person_id], 'Du bist eingetragen',
       niko_name(v_me) || ' hat dich eingetragen: ' || niko_label(p_day, p_kind) || '.', '', 'slot-' || p_day || '-' || p_kind);

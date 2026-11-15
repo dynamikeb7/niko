@@ -8,6 +8,7 @@ Bring- und Abholplan für den Kindergartenweg zweier Familien. Eine Web-App ohne
 - `config.js`: Supabase-Adresse und publishable Key (öffentlich gedacht)
 - `supabase/schema.sql`: Tabellen und Funktionen
 - `supabase/push.sql`: Push-Benachrichtigungen und Erinnerung am Morgen (nach schema.sql)
+- `supabase/absences.sql`: Kind bleibt zuhause (nach push.sql)
 - `supabase/functions/niko-push`: Supabase-Funktion, die Benachrichtigungen verschickt
 - `sw.js`: Service Worker für Benachrichtigungen
 

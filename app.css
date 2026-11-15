@@ -286,3 +286,22 @@ h1, h2, p { margin: 0; }
 .note { font-size: 13px; }
 .toggle.small { background: var(--ground); }
 .toggle.small button { min-height: 40px; font-size: 14px; }
+
+/* Aufgeräumtes Fenster */
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.grid3 .opt { flex-direction: column; justify-content: center; gap: 4px; min-height: 64px; padding: 6px 4px; font-size: 13px; text-align: center; }
+.grid3 .opt .chip { width: 28px; height: 28px; border-radius: 14px; }
+.acc-group { display: flex; flex-direction: column; gap: 8px; border-top: 1.5px solid #EEEAE0; padding-top: 14px; }
+.acc-label { text-transform: uppercase; letter-spacing: .06em; font-size: 12px; }
+.acc { background: var(--ground); border-radius: 16px; overflow: hidden; }
+.acc-head { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 50px; padding: 6px 14px; border: none; background: transparent; text-align: left; }
+.acc-title { width: 96px; flex: none; font-size: 14px; font-weight: 800; }
+.acc-value { flex: 1; min-width: 0; font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acc-value.strong { color: var(--ink); font-weight: 700; }
+.acc-head .chev { transition: transform .15s; }
+.acc-head[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.acc-body { padding: 0 10px 10px; display: flex; flex-direction: column; gap: 8px; }
+.acc-body textarea { min-height: 72px; border-radius: 12px; border: 1.5px solid var(--line); padding: 10px 12px; font-size: 16px; width: 100%; resize: vertical; background: var(--card); }
+.acc-body .switch-row { background: var(--card); border-color: var(--card); }
+.acc-body .switch-row[aria-checked="false"] { background: var(--grau-soft); }
+.acc-body .secondary { min-height: 46px; font-size: 15px; }

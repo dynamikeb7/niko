@@ -538,13 +538,16 @@ function vWeek() {
     const note = S.notes[iso];
     const isFocus = iso === focusIso;
     const bothSep = rs.every((r) => r.status === 'separate');
+    const bringNotices = notices.filter((n) => n.bring_by);
+    const otherNotices = notices.filter((n) => !n.bring_by);
+    const noticeLine = (n) => `<p class="notice-line">${icoInfo()}<span><b>${esc(n.title)}</b>${n.bring_by ? ` · bis ${esc(n.bring_by)} da sein` : ''}${n.body ? ` · ${esc(n.body)}` : ''}</span></p>`;
     const rows = bothSep
       ? `<button class="slot sep slim" data-a="slot" data-day="${iso}" data-kind="bring" aria-label="${DAYS_LONG[wd]}: getrennt. Ändern">
-          <span class="chip" aria-hidden="true">${icoSplit}</span><span class="txt"><span class="who">Getrennt, jede Familie für sich</span></span></button>`
+          <span class="chip" aria-hidden="true">${icoSplit}</span><span class="txt"><span class="who">Getrennt, jede Familie für sich</span></span></button>${bringNotices.map(noticeLine).join('')}`
       : rs.map((r, i) => (r.status === 'separate'
         ? `<button class="slot sep slim" data-a="slot" data-day="${iso}" data-kind="${r.kind}" aria-label="${DAYS_LONG[wd]}, ${KIND[r.kind]}: getrennt. Ändern">
             <span class="chip" aria-hidden="true">${icoSplit}</span><span class="txt"><span class="who">${KIND[r.kind]}: getrennt</span>${vs[i].lines.map((l) => `<span class="det">${esc(l)}</span>`).join('')}</span></button>`
-        : slotButton(r, vs[i]))).join('');
+        : slotButton(r, vs[i])) + (r.kind === 'bring' ? bringNotices.map(noticeLine).join('') : '')).join('');
     return `<section class="day${isFocus ? ' focus' : ''}${allHome ? ' all-home' : ''}" aria-label="${DAYS_LONG[wd]}, ${short(day)}">
       <button class="badge" data-a="day" data-day="${iso}" aria-label="${DAYS_LONG[wd]} ${short(day)}: Kinder, Notiz und Kindergarten-Mitteilung">
         ${isFocus ? `<span class="today-tag">${f.label}</span>` : ''}
@@ -554,7 +557,7 @@ function vWeek() {
       <div class="col">
         ${rows}
         ${absentOn(iso).length ? `<div class="home-line">${icoHome()}<span>${esc(absenceText(iso))}</span></div>` : ''}
-        ${notices.map((n) => `<p class="notice-line">${icoInfo()}<span><b>${esc(n.title)}</b>${n.bring_by ? ` · bis ${esc(n.bring_by)} da sein` : ''}${n.body ? ` · ${esc(n.body)}` : ''}</span></p>`).join('')}
+        ${otherNotices.map(noticeLine).join('')}
         ${note ? `<p class="note">${esc(note)}</p>` : ''}
       </div>
     </section>`;
@@ -672,11 +675,11 @@ function sheetFrame(kicker, title, inner) {
     ${inner}</div></div>`;
 }
 
-function optionButtons(cur, action, includeOpen) {
+function optionButtons(cur, action, includeOpen, grid = 'grid2') {
   const opts = S.peopleList.map((p) => `<button class="opt ${p.family}" data-a="${action}" data-status="person" data-person="${p.id}" aria-pressed="${cur.status === 'person' && cur.person === p.id}"><span class="chip" aria-hidden="true">${esc(p.name.charAt(0))}</span><span>${esc(p.name)}</span></button>`);
   opts.push(`<button class="opt s" data-a="${action}" data-status="separate" aria-pressed="${cur.status === 'separate'}"><span class="chip" aria-hidden="true">${icoSplit}</span><span>Getrennt</span></button>`);
   if (includeOpen) opts.push(`<button class="opt o" data-a="${action}" data-status="open" aria-pressed="${cur.status === 'open'}"><span class="chip" aria-hidden="true">?</span><span>Offen</span></button>`);
-  return `<div class="grid2">${opts.join('')}</div>`;
+  return `<div class="${grid}">${opts.join('')}</div>`;
 }
 
 function vSheet() {
@@ -696,26 +699,43 @@ function vSheet() {
     const stdTxt = !std ? 'offen' : std.status === 'person' ? nameOf(std.person_id) : std.status === 'separate' ? 'getrennt' : 'offen';
     const changed = ov ? `Geändert${ov.updated_by ? ` von ${nameOf(ov.updated_by)}` : ''}. Standard wäre: ${stdTxt}.` : '';
     const kids = S.children.map((c) => kidSwitch(sh.day, c, '')).join('');
-    const inner = `<div class="toggle small" role="group" aria-label="Bringen oder Abholen">
-        <button data-a="sheet-kind" data-kind="bring" aria-pressed="${sh.kind === 'bring'}">Bringen</button>
-        <button data-a="sheet-kind" data-kind="pick" aria-pressed="${sh.kind === 'pick'}">Abholen</button>
-      </div>
-      <p class="lead">${esc(status + lines)}</p>
-      ${changed ? `<p class="hint" style="margin:-8px 0 0">${esc(changed)}</p>` : ''}
-      <div class="stack" style="gap:8px"><span class="label">Wer macht's?</span>${optionButtons(r, 'set-slot', true)}</div>
-      <div class="stack">
+    const open = sh.open || {};
+    const homeIds = absentOn(sh.day);
+    const kidsValue = !homeIds.length ? `${S.children.map((c) => c.name).join(' und ')} ${S.children.length > 1 ? 'kommen' : 'kommt'}` : absenceText(sh.day);
+    const note = S.notes[sh.day] || '';
+    const notices = S.notices[sh.day] || [];
+    const section = (id, title, value, strong, body) => `<div class="acc">
+      <button class="acc-head" data-a="sec" data-id="${id}" aria-expanded="${!!open[id]}">
+        <span class="acc-title">${title}</span><span class="acc-value${strong ? ' strong' : ''}">${esc(value)}</span>${icoChev}</button>
+      ${open[id] ? `<div class="acc-body">${body}</div>` : ''}</div>`;
+    const noticeList = notices.map((n) => `<div class="notice-line" style="justify-content:space-between">
+        <span style="display:flex;gap:6px;min-width:0">${icoInfo()}<span><b>${esc(n.title)}</b>${n.bring_by ? ` · bis ${esc(n.bring_by)} da sein` : ''}${n.body ? ` · ${esc(n.body)}` : ''}</span></span>
+        ${sh.confirm === n.id
+          ? `<button class="textbtn danger" style="flex:none;min-height:32px" data-a="del-notice" data-id="${n.id}">Wirklich löschen</button>`
+          : `<button class="textbtn" style="flex:none;min-height:32px" data-a="ask-del" data-id="${n.id}">Löschen</button>`}</div>`).join('');
+    const inner = `<div class="stack" style="gap:10px">
+        <div class="toggle small" role="group" aria-label="Bringen oder Abholen">
+          <button data-a="sheet-kind" data-kind="bring" aria-pressed="${sh.kind === 'bring'}">Bringen</button>
+          <button data-a="sheet-kind" data-kind="pick" aria-pressed="${sh.kind === 'pick'}">Abholen</button>
+        </div>
+        <p class="lead"><b>${esc(status)}</b>${lines ? esc(lines) : ''}</p>
+        ${changed ? `<p class="hint" style="margin:-6px 0 0">${esc(changed)}</p>` : ''}
+        ${optionButtons(r, 'set-slot', true, 'grid3')}
         ${r.status === 'person' ? `<button class="primary" data-a="ask" ${S.busy ? 'disabled' : ''}>Abgeben und in der Gruppe fragen</button>` : ''}
         ${r.status === 'open' ? `<button class="primary" data-a="ask" ${S.busy ? 'disabled' : ''}>In der Gruppe fragen</button>` : ''}
         ${r.status === 'asked' && r.requestId ? `<a class="primary" href="${waLink(askText(r, r.requestId))}" target="_blank" rel="noopener">Nochmal in der Gruppe fragen</a>` : ''}
         ${r.changed ? '<button class="textbtn" style="align-self:center" data-a="reset">Zurück zum Standardplan</button>' : ''}
       </div>
-      ${kids ? `<div class="stack" style="gap:8px"><span class="label">Wer kommt am ${DAYS_LONG[r.wd]}?</span><div class="switches">${kids}</div></div>` : ''}
-      <form class="stack" style="gap:8px" data-form="note">
-        <div class="field"><label class="label" for="note">Notiz für ${DAYS_LONG[r.wd]}</label>
-        <textarea id="note" name="body" maxlength="500" placeholder="z. B. Treffpunkt heute beim Spielplatz">${esc(S.notes[sh.day] || '')}</textarea></div>
-        <button class="secondary" type="submit" ${S.busy ? 'disabled' : ''}>Notiz speichern</button>
-      </form>
-      <button class="textbtn" style="align-self:center" data-a="day" data-day="${sh.day}">Mitteilung vom Kindergarten eintragen</button>`;
+      <div class="acc-group">
+        <span class="label acc-label">Zum ${DAYS_LONG[r.wd]}</span>
+        ${kids ? section('kids', 'Kinder', kidsValue, homeIds.length > 0, `<div class="switches">${kids}</div>`) : ''}
+        ${section('note', 'Notiz', note || 'Keine', !!note, `<form class="stack" style="gap:8px" data-form="note">
+            <label class="vh" for="note">Notiz für ${DAYS_LONG[r.wd]}</label>
+            <textarea id="note" name="body" maxlength="500" placeholder="z. B. Treffpunkt heute beim Spielplatz">${esc(note)}</textarea>
+            <button class="secondary" type="submit" ${S.busy ? 'disabled' : ''}>Notiz speichern</button></form>`)}
+        ${section('notice', 'Kindergarten', notices.length ? notices.map((n) => n.title).join(', ') : 'Keine Mitteilung', notices.length > 0,
+          `${noticeList}<button class="secondary" data-a="day" data-day="${sh.day}">Mitteilung eintragen</button>`)}
+      </div>`;
     return sheetFrame('', `${DAYS_LONG[r.wd]}, ${short(d)}`, inner);
   }
   if (sh.type === 'share') {
@@ -807,6 +827,7 @@ app.addEventListener('click', async (ev) => {
       break;
     case 'slot': S.sheet = { type: 'slot', day: ds.day, kind: ds.kind }; render(); break;
     case 'sheet-kind': S.sheet.kind = ds.kind; render(); break;
+    case 'sec': S.sheet.open = Object.assign({}, S.sheet.open, { [ds.id]: !(S.sheet.open || {})[ds.id] }); render(); break;
     case 'day': S.sheet = { type: 'day', day: ds.day }; render(); break;
     case 'set-slot': {
       const sh = S.sheet;

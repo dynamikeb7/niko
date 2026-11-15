@@ -287,7 +287,7 @@ function vWelcome() {
       <li><span class="n" aria-hidden="true">2</span><span>Gib einen Tag ab, wenn du nicht kannst.</span></li>
       <li><span class="n" aria-hidden="true">3</span><span>Übernimm mit einem Tipp, wenn jemand fragt.</span></li>
     </ol>
-    <p class="hint" style="margin:0">Tipp: Leg NiKo über das Browser-Menü auf den Startbildschirm. Dann ist es wie eine App.</p>
+    <p class="hint" style="margin:0">Tipp: Leg NiKo auf den Startbildschirm. Android: in Chrome oben rechts auf ⋮, dann "Zum Startbildschirm hinzufügen". iPhone: in Safari auf Teilen, dann "Zum Home-Bildschirm".</p>
     <div class="stack push">
       <button class="primary" data-a="welcome-done">Los geht's</button>
       <button class="textbtn" style="align-self:center" data-a="not-me">Ich bin nicht ${esc(meName())}</button>
@@ -565,7 +565,7 @@ app.addEventListener('click', async (ev) => {
     case 'go-standard': S.view = 'standard'; S.sheet = null; history.pushState({ v: 'standard' }, '', '#standard'); render(); break;
     case 'go-week':
       S.view = 'week'; S.sheet = null; S.request = null; S.requestId = null;
-      history.replaceState(null, '', location.pathname);
+      history.replaceState(null, '', location.pathname + (new URLSearchParams(location.search).get('t') ? `?t=${S.token}` : ''));
       render();
       await reload();
       break;
@@ -700,8 +700,16 @@ async function start() {
   }
   const req = params.get('anfrage');
   if (req && /^[0-9a-f-]{36}$/i.test(req)) S.requestId = req;
-  // Den Token nicht in der Adresszeile stehen lassen.
-  if (t) history.replaceState(null, '', location.pathname + (S.requestId ? `?anfrage=${S.requestId}` : ''));
+  // iPhone: Ein Symbol auf dem Startbildschirm hat einen eigenen Speicher und startet mit der
+  // Adresse, die beim Hinzufügen offen war. Darum bleibt dort der Link in der Adresse stehen.
+  // Überall sonst nehmen wir den Token aus der Adresszeile.
+  const ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+  if (ios && !standalone && S.token) {
+    if (t !== S.token) history.replaceState(null, '', `${location.pathname}?t=${S.token}${S.requestId ? `&anfrage=${S.requestId}` : ''}${location.hash}`);
+  } else if (t) {
+    history.replaceState(null, '', location.pathname + (S.requestId ? `?anfrage=${S.requestId}` : '') + location.hash);
+  }
 
   if (!S.token) { S.view = 'nolink'; render(); return; }
   render();

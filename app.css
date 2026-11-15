@@ -9,6 +9,9 @@
   --gelb: #F7D560;
   --gelb-soft: #FDF3CD;
   --grau: #DEDAD0;
+  --gruen: #8ED1BC;
+  --gruen-soft: #DDF3EB;
+  --gruen-ink: #1B5E4A;
   --grau-soft: #F1EEE7;
   --rot: #C2452D;
   --rot-ink: #8A2A18;
@@ -106,6 +109,9 @@ h1, h2, p { margin: 0; }
 .fam-a .chip { background: var(--lila); }
 .fam-b { background: var(--gelb-soft); }
 .fam-b .chip { background: var(--gelb); }
+.slot.sep { background: var(--gruen-soft); border: 1.5px solid var(--gruen); }
+.slot.sep .chip { background: var(--gruen); color: var(--gruen-ink); }
+.slot.sep .who { color: var(--gruen-ink); }
 .slot.open { background: var(--rot-soft); border: 1.5px dashed var(--rot); }
 .slot.open .chip { background: var(--rot-chip); }
 .slot.conflict { border: 2px solid var(--blau); }
@@ -160,6 +166,8 @@ h1, h2, p { margin: 0; }
 .opt.a .chip { background: var(--lila); }
 .opt.b .chip { background: var(--gelb); }
 .opt.o .chip { background: var(--rot-chip); }
+.opt.s .chip { background: var(--gruen); color: var(--gruen-ink); }
+.opt.s[aria-pressed="true"] { background: var(--gruen-soft); }
 .opt[aria-pressed="true"] { border: 2px solid var(--ink); background: var(--grau-soft); }
 .opt.a[aria-pressed="true"] { background: var(--lila-soft); }
 .opt.b[aria-pressed="true"] { background: var(--gelb-soft); }

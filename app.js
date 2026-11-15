@@ -58,6 +58,7 @@ ${mood === 'worried'
 const icoLeft = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const icoRight = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const icoChev = '<svg class="chev" aria-hidden="true" width="14" height="14" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const icoSplit = '<svg aria-hidden="true" width="18" height="18" viewBox="0 0 16 16"><path d="M8 14.5V9L3.8 4.6M8 9l4.2-4.4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 7.4V3.8h3.6M13 7.4V3.8H9.4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const icoClose = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 const icoWarn = (label) => `<svg ${label ? `role="img" aria-label="${label}"` : 'aria-hidden="true"'} width="18" height="18" viewBox="0 0 16 16" style="flex:none"><path d="M8 1.6l6.8 11.9H1.2z" fill="#C2452D" stroke="#C2452D" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 6.2v3.3" fill="none" stroke="#FFFFFF" stroke-width="1.7" stroke-linecap="round"/><circle cx="8" cy="11.5" r="0.95" fill="#FFFFFF"/></svg>`;
 const icoInfo = (label) => `<svg ${label ? `role="img" aria-label="${label}"` : 'aria-hidden="true"'} width="18" height="18" viewBox="0 0 16 16" style="flex:none"><circle cx="8" cy="8" r="7.4" fill="#1D5FBF"/><path d="M8 7.3v4" fill="none" stroke="#FFFFFF" stroke-width="1.7" stroke-linecap="round"/><circle cx="8" cy="4.6" r="1" fill="#FFFFFF"/></svg>`;
@@ -212,7 +213,9 @@ function slotView(r) {
     }
   } else if (r.status === 'separate') {
     v.who = 'Getrennt';
-    v.chip = '–';
+    v.chip = '';
+    v.chipHtml = icoSplit;
+    v.cls += ' sep';
   } else {
     v.open = true;
     v.cls += ' open';
@@ -335,7 +338,7 @@ function vWeek() {
       </button>
       <div class="col">
         ${vs.map((v, i) => `<button class="${v.cls}" data-a="slot" data-day="${iso}" data-kind="${rs[i].kind}" aria-label="${esc(v.label)}. Ändern">
-          <span class="chip" aria-hidden="true">${esc(v.chip)}</span>
+          <span class="chip" aria-hidden="true">${v.chipHtml || esc(v.chip)}</span>
           <span class="txt"><span class="kind">${KIND[rs[i].kind]}${rs[i].changed ? ' · geändert' : ''}</span>
           <span class="who">${esc(v.who)}</span>
           ${v.lines.map((l) => `<span class="det">${esc(l)}</span>`).join('')}</span>${icoChev}</button>`).join('')}
@@ -383,7 +386,7 @@ function vStandard() {
       const fake = { iso: '', wd, kind, status: st.status, person: st.person_id, detail: st.detail || '', askedBy: null };
       const v = slotView(fake);
       return `<button class="${v.cls}" data-a="std-slot" data-wd="${wd}" data-kind="${kind}" aria-label="${esc(v.label)}. Ändern">
-        <span class="chip" aria-hidden="true">${esc(v.chip)}</span>
+        <span class="chip" aria-hidden="true">${v.chipHtml || esc(v.chip)}</span>
         <span class="txt"><span class="kind">${KIND[kind]}</span><span class="who">${esc(v.who)}</span>
         ${v.lines.map((l) => `<span class="det">${esc(l)}</span>`).join('')}</span>${icoChev}</button>`;
     }).join('');
@@ -418,7 +421,7 @@ function vRequest() {
     const v = slotView(r);
     const what = `${DAYS_LONG[wd]}, ${short(d)}`;
     body = `<div class="card"><small class="label" style="text-transform:uppercase;letter-spacing:.06em">${KIND[q.kind]}</small><h2>${what}</h2>
-      <div class="${v.cls}" style="margin-top:10px"><span class="chip" aria-hidden="true">${esc(v.chip)}</span>
+      <div class="${v.cls}" style="margin-top:10px"><span class="chip" aria-hidden="true">${v.chipHtml || esc(v.chip)}</span>
       <span class="txt"><span class="who">${esc(v.who)}</span>${v.lines.map((l) => `<span class="det">${esc(l)}</span>`).join('')}</span></div></div>`;
     if (q.result === 'accepted') {
       bubble = `Danke! Du ${q.kind === 'bring' ? 'bringst' : 'holst'} am ${DAYS_LONG[wd]}${q.kind === 'pick' ? ' ab' : ''}.`;
@@ -458,7 +461,7 @@ function sheetFrame(kicker, title, inner) {
 
 function optionButtons(cur, action, includeOpen) {
   const opts = S.peopleList.map((p) => `<button class="opt ${p.family}" data-a="${action}" data-status="person" data-person="${p.id}" aria-pressed="${cur.status === 'person' && cur.person === p.id}"><span class="chip" aria-hidden="true">${esc(p.name.charAt(0))}</span><span>${esc(p.name)}</span></button>`);
-  opts.push(`<button class="opt" data-a="${action}" data-status="separate" aria-pressed="${cur.status === 'separate'}"><span class="chip" aria-hidden="true">–</span><span>Getrennt</span></button>`);
+  opts.push(`<button class="opt s" data-a="${action}" data-status="separate" aria-pressed="${cur.status === 'separate'}"><span class="chip" aria-hidden="true">${icoSplit}</span><span>Getrennt</span></button>`);
   if (includeOpen) opts.push(`<button class="opt o" data-a="${action}" data-status="open" aria-pressed="${cur.status === 'open'}"><span class="chip" aria-hidden="true">?</span><span>Offen</span></button>`);
   return `<div class="grid2">${opts.join('')}</div>`;
 }

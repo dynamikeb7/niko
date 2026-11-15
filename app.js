@@ -492,11 +492,11 @@ function todayCard() {
   const myKids = S.children.filter((c) => c.family === myFam);
   const kidBtns = myKids.map((c) => {
     const absent = absentOn(iso).includes(c.id);
-    return `<button class="t-btn" data-a="absence" data-day="${iso}" data-child="${c.id}" data-absent="${!absent}">${icoHome('#FFFFFF')}<span>${esc(absent ? `${c.name} kommt doch` : `${c.name} kommt ${f.label.toLowerCase()} nicht`)}</span></button>`;
+    return `<button class="t-btn" data-a="absence" data-day="${iso}" data-child="${c.id}" data-absent="${!absent}">${icoHome()}<span>${esc(absent ? `${c.name} kommt doch` : `${c.name} kommt ${f.label.toLowerCase()} nicht`)}</span></button>`;
   }).join('');
   return `<section class="today-card" aria-label="${f.label}">
     <div class="t-head"><span>${f.label}</span><small>${DAYS_LONG[wd]}, ${short(f.d)}</small></div>
-    ${home ? `<div class="t-row">${icoHome('#F7D560')}<span class="t-txt"><b>${esc(home)}</b></span></div>` : ''}
+    ${home ? `<div class="t-row">${icoHome()}<span class="t-txt"><b>${esc(home)}</b></span></div>` : ''}
     ${allHome ? '' : rows.join('')}
     ${notices}
     ${kidBtns ? `<div class="t-actions">${kidBtns}</div>` : ''}
